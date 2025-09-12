@@ -3,7 +3,7 @@ import { createRouter,createWebHistory} from "vue-router";
 import Login from "../view/Login.vue";
 
 
-import Driver from "../view/driver.vue";
+import Driver from "../view/Driver.vue";
 import Bus_queue from "../view/Bus_queue.vue";
 import Detail_bus from "../view/Detail_bus.vue";
 import Seat_detail from "../view/Seat_detail.vue";

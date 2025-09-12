@@ -90,7 +90,7 @@
 
 
 <script setup>
-import { ref, watch, computed } from "vue"
+import { ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useQuery } from "@vue/apollo-composable"
 import { gql } from "@apollo/client/core"
@@ -108,41 +108,39 @@ function logout() {
   router.push({ name: "login" })
 }
 
-
+// Employee ID from localStorage
 const epyId = ref(parseInt(localStorage.getItem("epy_id") || "0"))
 
-
+// GraphQL query to fetch employee details
 const GET_EMPLOYEE = gql`
   query GetEmployeeById($id: Int!) {
     Bus_employee_by_pk(epy_id: $id) {
       epy_name
-        
       epy_email
     }
   }
 `
 
-
-const { result, loading, refetch, error } = useQuery(GET_EMPLOYEE, () => ({
+const { result } = useQuery(GET_EMPLOYEE, () => ({
   id: epyId.value
 }))
 
 const employee = ref({ name: "", email: "" })
 
-
+// Watch for changes in the query result
 watch(() => result.value, (newVal) => {
   const data = newVal?.Bus_employee_by_pk
   if (data) {
-    employee.value.name = data.epy_name
-    employee.value.email = data.epy_email
+    employee.value = {
+      name: data.epy_name,
+      email: data.epy_email
+    }
   } else {
-   
-    employee.value.name = ""
-    employee.value.email = ""
+    employee.value = { name: "", email: "" }
   }
 })
 
-
+// Listen for changes in localStorage to update employee ID
 window.addEventListener('storage', () => {
   const newId = parseInt(localStorage.getItem("epy_id") || "0")
   if (newId !== epyId.value) {
@@ -150,14 +148,3 @@ window.addEventListener('storage', () => {
   }
 })
 </script>
-
-
-
-<style scoped>
-.v-main {
-  padding-top: 60px;
-}
-* {
-  font-family: 'Noto Sans Lao', 'Roboto', sans-serif;
-}
-</style>
