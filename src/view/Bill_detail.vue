@@ -1,192 +1,128 @@
 <template>
-  <div class="bill-content">
-    <h1 class="title">ລາຍລະອຽດໃບບິນ</h1>
+  <v-container align="center" >
+    <h1 class="page-title">ລາຍລະອຽດບິນ</h1>
 
-    <div v-if="loading" class="status-message">ກຳລັງໂຫຼດຂໍ້ມູນ...</div>
-    <div v-else-if="error" class="status-message error">ມີບັນຫາ: {{ error.message }}</div>
+    <div v-if="loading" class="loading">Loading...</div>
+    <div v-else-if="error" class="error">Error: {{ error.message }}</div>
 
     <div v-else-if="ticket" class="ticket-card">
-      <div class="info-group">
-        <h1>ຕົ້ນທາງ-ປາຍທາງ:{{ ticket.queue_op.bus_queue.bq_distance }}</h1>
+      <div>
+      <h2>ຕົ້ນທາງ-ປາຍທາງ: {{ ticket.bus_queue?.bq_distance || '-' }}</h2></div>
+
+
+      <div class="info-row">
+        <div><strong>ປ້າຍລົດ:</strong> {{ ticket.bus?.bus_number || '-' }}</div>
+        <div><strong>ປະເພດລົດ:</strong> {{ ticket.bus?.category?.cat_type || '-' }}</div>
+      </div>
+
+      <div class="info-row">
+        <div><strong>ລາຄາຕໍ່ທີ່ນັ່ງ:</strong> {{ ticket.price?.price || '0.000' }} LAK</div>
+        <div><strong>ລາຄາລວມ:</strong> {{ formattedTotalPrice }} LAK</div>
         
-        
-      </div>
-<div class="info-group" v-if="selectedSeats.length">
-  <div><strong>ເລກທີ່ນັ່ງ:</strong> {{ selectedSeats.join(', ') }}</div>
-  <div><strong>ລາຄາ:</strong> {{ ticket.tk_price }} LAK</div>
-  
-</div>
-
-      <div class="info-group">
-        <div><strong>ປ້າຍລົດ:</strong> {{ ticket.queue_op.bus.bus_number }}</div>
-        <div><strong>ປະເພດລົດ:</strong> {{ ticket.queue_op.bus.category?.cat_type || '-' }}</div>
       </div>
 
-      <div class="info-group">
-        <div><strong>ວັນທີ ອອກເດີນທາງ:</strong> {{ ticket.queue_op.bus_queue.bq_date }}</div>
-        <div><strong>ເວລາ ອອກເດີນທາງ:</strong> {{ ticket.queue_op.bus_queue.bq_time }}</div>
+      <div class="info-row">
+        <div><strong>ວັນທີ:</strong> {{ ticket.Date || '-' }}</div>
+        <div><strong>ເວລາ:</strong> {{ ticket.time?.time || '-' }}</div>
       </div>
 
-      <div class="info-group">
-        <div><strong>ໂຊນບ່ອນຂຶ້ນລົດ:</strong> {{ ticket.queue_op.bus_queue.bq_zone }}</div>
-        <div><strong>ລາຄາລວມທັງໝົດ:</strong> {{ totalPrice }} LAK</div>
+      <div v-if="seats.length" class="info-row">
+        <div><strong>ເລກທີ່ນັ່ງ:</strong> {{ seats.join(', ') }}</div>
+        <div><strong>ບ່ອນຈອດລົດ:</strong> {{ ticket.zone?.zone || '-' }}</div>
       </div>
 
-      <div class="info-group">
-        <div><strong>ຊື່ຜູ້ໂດຍສານ:</strong> {{ userName }}</div>
-        <div><strong>ເບີໂທຜູ້ໂດຍສານ:</strong> {{ userPhone }}</div>
+      <h2 class="section-title">ຂໍ້ມູນຜູ້ໂດຍສານ</h2>
+      <div class="form-group">
+        <input type="text" :value="name" disabled />
+        <input type="tel" :value="phone" disabled /> 
       </div>
 
-      <button class="back-btn" @click="backhome()">ກັບໄປໜ້າຫຼັກ</button>
+      
+      <v-btn color="info" size="small"  @click="backToHome" align="center"> ກັບຫາໜ້າຫລັກ</v-btn>
     </div>
 
-    <div v-else class="status-message">ບໍ່ພົບຂໍ້ມູນປີ້</div>
-  </div>
+    <div v-else class="no-data">
+      ບໍ່ມີຂໍ້ມູນບິນ
+    </div>
+    
+  </v-container>
 </template>
 
-
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { gql } from '@apollo/client/core'
 import apolloClient from '../apollo.js'
-import { computed } from 'vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const userPhone = route.query.phone
-const userName = route.query.name
-
-const ticket = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const ticket = ref(null)
 
-const GET_TICKET_BY_ID = gql`
-  query GetTicketById($id: Int!) {
-    Bus_ticket_by_pk(tk_id: $id) {
-      tk_id
-      tk_price
-      queue_op {
-        bus {
-          bus_number
-          category { cat_type }
-        }
-        bus_queue {
-          bq_distance
-          bq_date
-          bq_time
-          bq_zone
-        }
+// รับข้อมูลจาก query
+const tk_id = route.query.tk_id
+const seats = route.query.seats ? route.query.seats.split(',') : []
+const name = route.query.name || ''
+const phone = route.query.phone || ''
+const totalPrice = parseFloat(route.query.totalPrice || 0)
+
+// totalPrice แสดง .000
+const formattedTotalPrice = computed(() => totalPrice.toFixed(3))
+
+const GET_TICKET_DETAILS = gql`
+query GetTicket($id: Int!) {
+  Bus_ticket_by_pk(tk_id: $id) {
+    tk_id
+    tk_price
+    queue_op {
+      Date
+      time { time }
+      bus_queue { bq_distance }
+      bus {
+        bus_number
+        category { cat_type }
       }
+      zone { zone }
+      price { price }
     }
   }
-`
-
-
-const selectedSeats = route.query.seats ? route.query.seats.split(',') : []
-
-const totalPrice = computed(() => {
-  if (!ticket.value) return 0
-  return ticket.value.tk_price * selectedSeats.length
-})
-
-
-function backhome() {
-  router.push({ name: "bus-queue" ,
-     query: {
-      tk_id: ticket.value.tk_id,
-      seats: selectedSeats.join(','),
-      name: userName,
-      phone: userPhone
-    }
-  })
-  
-}
+}`
 
 onMounted(async () => {
-  const tkId = parseInt(route.query.tk_id)
-  if (!tkId) {
-    error.value = new Error('tk_id is required')
+  if(!tk_id) {
     loading.value = false
     return
   }
 
-  loading.value = true
-  error.value = null
-
   try {
     const result = await apolloClient.query({
-      query: GET_TICKET_BY_ID,
-      variables: { id: tkId }
+      query: GET_TICKET_DETAILS,
+      variables: { id: parseInt(tk_id) }
     })
-    ticket.value = result.data.Bus_ticket_by_pk
+    ticket.value = result.data.Bus_ticket_by_pk.queue_op
   } catch (err) {
     error.value = err
+    console.error(err)
   } finally {
     loading.value = false
   }
 })
+
+function backToHome() {
+  router.push({ name: 'bus-queue' }) 
+}
 </script>
+
 <style scoped>
-.bill-content {
-
-  max-width: 600px;
-  margin: 40px auto;
-  padding: 2em;
-  font-family: 'Noto Sans Lao', sans-serif;
-  background-color: #ffffff;
-}
-
-.title {
-  text-align: center;
-  font-size: 28px;
-  margin-bottom: 24px;
-  color: #2f54c0;
-}
-
-.status-message {
-  text-align: center;
-  font-size: 16px;
-  color: #888;
-  margin-top: 40px;
-}
-
-.status-message.error {
-  color: red;
-}
-
-.ticket-card {
-  background: #f9f9f9;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.info-group {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  font-size: 16px;
-}
-
-.back-btn {
-  margin-top: 24px;
-  background-color: #4372e0;
-  color: #fff;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  width: 100%;
-  cursor: pointer;
-  font-family: 'Noto Sans Lao', sans-serif;
-  transition: background-color 0.3s;
-}
-
-.back-btn:hover {
-    font-family: 'Noto Sans Lao', sans-serif;
-  background-color: #2f54c0;
-}
+.page-title { text-align:center; color:#2f54c0; margin-bottom:24px; font-family:'Noto Sans Lao'; }
+.ticket-card { background:#f9f9f9; padding:25px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1); }
+.info-row { display:flex; justify-content:space-between; margin-bottom:12px; font-size:16px; }
+.section-title { margin-top:24px; margin-bottom:12px; color:#333; }
+.form-group { display:flex; gap:10px; margin-bottom:16px; }
+input { flex:1; padding:10px 12px; font-size:16px; border:1px solid #ccc; border-radius:8px; background:#eee; }
+.confirm-btn { background:#4372e0; color:white; padding:12px 20px; font-size:16px; border:none; border-radius:8px; cursor:pointer; flex:1; margin-top:12px; }
+.confirm-btn:hover { background:#2f54c0; }
+.loading, .error, .no-data { text-align:center; margin-top:40px; font-size:18px; color:#999; }
 </style>
-

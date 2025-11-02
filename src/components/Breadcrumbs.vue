@@ -1,48 +1,75 @@
-<template>
-  <v-breadcrumbs :items="breadcrumbs">
-    <template v-slot:divider>
-      <v-icon>mdi-chevron-right</v-icon>
-    </template>
-  </v-breadcrumbs>
-</template>
-
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed } from "vue"
+import { useRoute, useRouter } from "vue-router"
 
 const route = useRoute()
+const router = useRouter()
+
+// Mapping route เป็น parent-child
+const breadcrumbMap = {
+  '/dashboard': null,
+  '/ticket': '/dashboard',
+  '/detail/:id': '/ticket',
+  '/seat/:id': '/ticket',
+  '/bill/:id': '/ticket',
+  '/drivers': '/dashboard',
+  '/add-ticket': '/ticket',
+  '/add-driver': '/drivers',
+  '/list-bus-queue': '/dashboard',
+  '/add-queue': '/ticket',
+  '/ticket-detail': '/dashboard',
+  '/list-bus': 'list-bus',
+}
+
+
+const breadcrumbName = {
+  '/dashboard': 'Dashborad',
+  '/ticket': 'ticket',
+  '/detail/:id': 'Detail-ticket',
+  '/seat/:id': 'Detail-seat',
+  '/bill/:id': 'Detail-bill',
+  '/drivers': 'All-drivers',
+  '/add-ticket': 'Add-ticket',
+  '/add-driver': 'Add-drivers',
+  '/list-bus-queue': 'List-bus-queue',
+  '/add-queue': 'Add-queue',
+  '/ticket-detail': 'List-ticket',
+  '/': 'login',
+  '/list-bus': 'list-bus',}
+
+
+function findRoutePattern(path) {
+  return Object.keys(breadcrumbMap).find(pattern => {
+    const regex = new RegExp("^" + pattern.replace(/:\w+/g, "\\w+") + "$")
+    return regex.test(path)
+  })
+}
 
 const breadcrumbs = computed(() => {
-  const items = []
-
-  // Ticket
-  if (['bus-queue', 'home', 'detail', 'seat', 'bill'].includes(route.name)) {
-    items.push({ title: 'Ticket', disabled: route.name === 'bus-queue', to: '/ticket' })
-  }
-
-  // Ticket Detail
-  if (['home', 'detail', 'seat', 'bill'].includes(route.name)) {
-    items.push({
-      title: 'Ticket Detail',
-      disabled: route.name === 'home',
-      to: '/ticket-detail'
+  const list = []
+  let currentPath = route.path
+  while (currentPath) {
+    const pattern = findRoutePattern(currentPath)
+    if (!pattern) break
+    list.unshift({
+      label: breadcrumbName[pattern],
+      href: currentPath.includes(":") ? currentPath : currentPath
     })
+    currentPath = breadcrumbMap[pattern]
   }
-
-  // Detail
-  if (['detail', 'seat', 'bill'].includes(route.name)) {
-    items.push({
-      title: 'Detail',
-      disabled: route.name === 'detail',
-      to: route.name === 'detail' ? undefined : `/detail/${route.params.id}`
-    })
-  }
-
-  // Bill
-  if (['bill'].includes(route.name)) {
-    items.push({ title: 'Bill', disabled: true })
-  }
-
-  return items
+  return list
 })
 </script>
+
+<template>
+  <nav class="flex" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-2 text-sm">
+      <li v-for="(item, index) in breadcrumbs" :key="index" class="flex items-center">
+        <span v-if="index > 0" class="mx-1">></span>
+        <router-link :to="item.href" class="text-gray-500 hover:text-gray-700">
+          {{ item.label }}
+        </router-link>
+      </li>
+    </ol>
+  </nav>
+</template>

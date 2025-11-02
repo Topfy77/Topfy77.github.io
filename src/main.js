@@ -14,6 +14,6 @@ const app = createApp({
   render: () => h(App)
 })
 
-app.use(router)   // ลบได้ถ้าไม่ได้ใช้
+app.use(router)   
 app.use(vuetify)
 app.mount('#app')

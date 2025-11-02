@@ -32,10 +32,13 @@
 
             <v-list density="compact" nav>
               <v-list-item prepend-icon="mdi-home-city" title="dashboard" to="/dashboard" router />
-              <v-list-item prepend-icon="mdi-account" title="ຈັດການປີ້ລົດ" to="/ticket" />
-              <v-list-item prepend-icon="mdi-account-group-outline" title="ລາຍລະອຽດປີ້ລົດທີ່ຖືກຂາຍ" to="/ticket-detail" />
+              <v-list-item prepend-icon="mdi-account" title="ຈັດການໃບບິນລົດ" to="/ticket" />
+              <v-list-item prepend-icon="mdi-account-group-outline" title="ລາຍລະອຽດໃບບິນລົດທີ່ຖືກຂາຍ" to="/ticket-detail" />
+              <v-list-item prepend-icon="mdi-account-group-outline" title="ຈັດການຄິວລົດເມ" to="/list-queue" />
+              <v-list-item prepend-icon="mdi-account-group-outline" title="ຈັດການຂໍ້ມູນລົດເມ"to="/list-bus"/>
               <v-list-item prepend-icon="mdi-account-group-outline" title="ຂໍ້ມູນຄົນຂັບລົດເມ" to="/drivers" />
-              <v-list-item prepend-icon="mdi-account-group-outline" title="ຈັດການຄິວລົດ" to="/list-bus-queue" />
+              
+              <v-list-item prepend-icon="mdi-account-group-outline" title="ການຕັ້ງຄ່າ"  to="/setting" />
             </v-list>
           </div>
 
@@ -82,6 +85,7 @@
 
       <!-- Main -->
       <v-main class="pt-0">
+        <Breadcrumbs />
         <router-view />
       </v-main>
     </v-layout>
@@ -90,6 +94,7 @@
 
 
 <script setup>
+import Breadcrumbs from "./Breadcrumbs.vue"
 import { ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useQuery } from "@vue/apollo-composable"
@@ -148,3 +153,8 @@ window.addEventListener('storage', () => {
   }
 })
 </script>
+<style scoped>
+*{
+   font-family: 'Noto Sans Lao', sans-serif;
+}
+</style>

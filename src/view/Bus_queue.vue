@@ -1,271 +1,225 @@
 <template> 
   <v-container>
-    <h1>ticket</h1>
+    <h1 align="center" class="page-title">ປີ້ລົດເມໃນມື້ນີ້</h1>
 
-    <div class="search-bar">
+    <!-- search bar -->
+    <div class="search-bar" style="display:flex; gap:10px; margin-bottom:20px;">
       <v-text-field
         v-model="searchDistance"
         label="ຄົ້ນຫາ: ຕົ້ນທາງ-ປາຍທາງ"
-        dense
-        outlined
+        dense outlined
       ></v-text-field>
 
-      <!-- Date Picker -->
-      <v-menu
-        v-model="datePickerMenu"
-        :close-on-content-click="false"
-        transition="scale-transition"
-        offset-y
-        min-width="auto"
-      >
+      <v-menu v-model="datePickerMenu" :close-on-content-click="false"
+        transition="scale-transition" offset-y min-width="auto">
         <template #activator="{ props }">
           <v-text-field
             v-model="searchDateFormatted"
             label="ວັນທີອອກເດີນທາງ"
-            readonly
-            v-bind="props"
-            dense
-            outlined
+            readonly v-bind="props"
+            dense outlined
           ></v-text-field>
         </template>
-        <v-date-picker
-          v-model="searchDate"
-          @update:modelValue="updateDateFormatted"
-        ></v-date-picker>
+        <v-date-picker 
+          v-model="searchDate" 
+          @update:modelValue="updateDateFormatted" 
+          @input="updateDateFormatted"
+        />
       </v-menu>
 
-      <!-- Time Picker -->
-      <v-menu
-        v-model="timePickerMenu"
-        :close-on-content-click="false"
-        transition="scale-transition"
-        offset-y
-        min-width="auto"
-      >
-        <template #activator="{ props }">
-          <v-text-field
-            v-model="searchTime"
-            label="ເວລາອອກເດີນທາງ"
-            readonly
-            v-bind="props"
-            dense
-            outlined
-          ></v-text-field>
-        </template>
-        <v-time-picker
-          v-model="searchTime"
-          format="24hr"
-        ></v-time-picker>
-      </v-menu>
-
-      <!-- Search Button -->
-      <v-btn @click="searchTickets" color="primary">ຄົ້ນຫາ</v-btn>
+      <v-btn @click="searchBusQueue" color="primary">ຄົ້ນຫາ</v-btn>
     </div>
 
-    <!-- ตาราง -->
+    <!-- ตารางคิว -->
     <v-data-table
       :headers="headers"
-      :items="displayedTickets"
-      :items-per-page="rowsPerPage"
-      class="elevation-1"
+      :items="queueOps"
       :loading="loading"
+      item-key="queue_id"
+      hide-default-footer
+      class="elevation-1"
     >
-     <template v-slot:item.queue_op.bus_queue.bq_date="{ item }">
-  {{ item.queue_op?.bus_queue?.bq_date ? formatDate(item.queue_op.bus_queue.bq_date) : '' }}
-</template>
+      <template #item.bq_distance="{ item }">
+        {{ item.bus_queue?.bq_distance }}
+      </template>
 
+      <template #item.Date="{ item }">
+        {{ formatDateDisplay(item.Date) }}
+      </template>
 
-      <template v-slot:item.actions="{ item }">
-        <v-btn color="primary" @click="gotodetail(item)">ລາຍລະອຽດ</v-btn>
+      <template #item.actions="{ item }">
+        <v-btn color="info" size="small" @click="goToDetails(item)">
+          ລາຍລະອຽດ
+        </v-btn>
       </template>
     </v-data-table>
+
+    <!-- Pagination -->
+    <v-row align="center" class="mt-4">
+      <v-col cols="12" class="d-flex justify-space-between align-center">
+        <div>
+          Items per page:
+          <v-select
+            :items="limits"
+            v-model="pagination.limit"
+            dense
+            hide-details
+            style="width:80px"
+            @change="changePage(1)"
+          ></v-select>
+        </div>
+        <div>
+          {{ startItem }}-{{ endItem }} of {{ total }}
+          <v-btn icon @click="changePage(pagination.page - 1)" :disabled="pagination.page === 1">
+            &lt;
+          </v-btn>
+          <v-btn icon @click="changePage(pagination.page + 1)" :disabled="pagination.page >= totalPages">
+            &gt;
+          </v-btn>
+        </div>
+      </v-col>
+    </v-row>
+
   </v-container>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
 import { gql } from '@apollo/client/core'
 import apolloClient from '../apollo.js'
+import { useRouter } from 'vue-router'
 
-// Routing
 const router = useRouter()
-function gotodetail(ticket) {
-  router.push({ name: 'seat', params: { id: ticket.tk_id } })
-}
+const loading = ref(false)
+const queueOps = ref([])
+const total = ref(0)
 
-// ตัวแปรค้นหา
+const limits = [5, 10, 15, 20]
+const pagination = ref({ page: 1, limit: 10 })
+
 const searchDistance = ref('')
 const searchDate = ref(null)
-const searchTime = ref('')
 const searchDateFormatted = ref('')
-
-// เมนู picker
 const datePickerMenu = ref(false)
-const timePickerMenu = ref(false)
 
-// แสดงวันที่แบบ dd/MM/yyyy
-function updateDateFormatted() {
-  if (!searchDate.value) {
-    searchDateFormatted.value = ''
-    return
+const headers = [
+  { title: 'ໃລຍະທາງ', value: 'bq_distance' },
+  { title: 'ວັນທີອອກເດີນທາງ', value: 'Date' },
+  { title: 'ການຈັດການ', value: 'actions', sortable: false }
+]
+
+// GraphQL Query
+const GET_QUEUE_OPS = gql`
+  query GetQueueOps($limit: Int!, $offset: Int!, $distance: String, $date: date) {
+    Bus_queue_op(
+      where: {
+        _and: [
+          { Date: { _eq: $date } },
+          { bus_queue: { bq_distance: { _ilike: $distance } } }
+        ]
+      }
+      limit: $limit
+      offset: $offset
+    ) {
+      queue_id
+      Date
+      bus_queue { bq_id bq_distance }
+    }
+
+    Bus_queue_op_aggregate(
+      where: {
+        _and: [
+          { Date: { _eq: $date } },
+          { bus_queue: { bq_distance: { _ilike: $distance } } }
+        ]
+      }
+    ) {
+      aggregate { count(columns: queue_id) }
+    }
   }
-  const d = new Date(searchDate.value)
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  searchDateFormatted.value = `${day}/${month}/${year}`
-}
+`
 
-// แปลง date ISO เป็น dd/MM/yyyy สำหรับแสดงตาราง
-function formatDate(dateStr) {
-  if (!dateStr) return ''
-  const d = new Date(dateStr)
+// Helper functions
+function formatDateDisplay(date) {
+  if (!date) return ''
+  const d = new Date(date)
   const day = String(d.getDate()).padStart(2, '0')
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const year = d.getFullYear()
   return `${day}/${month}/${year}`
 }
 
-// ตารางและโหลดข้อมูล
-const rowsPerPage = ref(10)
-const ticketsToday = ref([])      // ข้อมูลวันที่วันนี้ตอนโหลดหน้า
-const ticketsSearch = ref([])     // ข้อมูลหลังค้นหา
-const loading = ref(false)
-const error = ref(null)
+function formatLocalDateISO(date) {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
-// Headers ตาราง
-const headers = [
-  { title: 'ຕົ້ນທາງ-ປາຍທາງ', value: 'queue_op.bus_queue.bq_distance' },
-  { title: 'ລາຄາ', value: 'tk_price' },
-  { title: 'ປ້າຍລົດເມ', value: 'queue_op.bus.bus_number' },
-  { title: 'ປະເພດລົດເມ', value: 'queue_op.bus.category.cat_type' },
-  { title: 'ຈຳນວນບ່ອນນັ່ງ', value: 'queue_op.bus.bus_capacity' },
-  { title: 'ຈຳນວນຖືກຊື້', value: 'queue_op.bus.seats_reserved' },
-  { title: 'ຈຳນວນຍັງວ່າງ', value: 'queue_op.bus.seats_available' },
-  { title: 'ໂຊນຈອດລົດ', value: 'queue_op.bus_queue.bq_zone' },
-  { title: 'ວັນທີ ອອກເດີນທາງ', value: 'queue_op.bus_queue.bq_date' },
-  { title: 'ເວລາ ອອກເດີນທາງ', value: 'queue_op.bus_queue.bq_time' },
-  { title: 'ລາຍລະອຽດ', value: 'actions', sortable: false },
-]
-
-// ควบคุมว่าแสดงข้อมูลอะไร
-const isSearching = ref(false)
-const displayedTickets = computed(() => {
-  return isSearching.value ? ticketsSearch.value : ticketsToday.value
-})
-
-// GraphQL Query
-const GET_TICKETS_BY_DATES = gql`
-  query GetTicketsByDates($dates: [date!]) {
-    Bus_ticket(where: {
-      queue_op: {
-        bus_queue: {
-          bq_date: { _in: $dates }
-        }
-      }
-    }) {
-      tk_id
-      tk_price
-      queue_op {
-        bus {
-          bus_number
-          bus_capacity
-          seats_reserved
-          seats_available
-          category {
-            cat_type
-          }
-        }
-        bus_queue {
-          bq_distance
-          bq_date
-          bq_time
-          bq_zone
-        }
-      }
-    }
+function updateDateFormatted() {
+  if (!searchDate.value) {
+    searchDateFormatted.value = ''
+    return
   }
-`
+  searchDateFormatted.value = formatDateDisplay(searchDate.value)
+}
 
-// โหลดข้อมูลวันนี้ตอนหน้าโหลด
-const today = new Date().toISOString().slice(0, 10)
-// โหลดข้อมูลวันนี้ตอนหน้าโหลด
-async function loadTodayTickets() {
+// โหลดข้อมูลแบบ server-side
+async function loadQueueOps() {
   loading.value = true
   try {
-    const result = await apolloClient.query({
-      query: GET_TICKETS_BY_DATES,
-      variables: { dates: [today] },
+    const offset = (pagination.value.page - 1) * pagination.value.limit
+    const dateValue = searchDate.value ? formatLocalDateISO(searchDate.value) : formatLocalDateISO(new Date())
+    const distanceValue = `%${searchDistance.value.trim()}%`
+
+    const { data } = await apolloClient.query({
+      query: GET_QUEUE_OPS,
+      variables: {
+        limit: pagination.value.limit,
+        offset,
+        distance: distanceValue,
+        date: dateValue
+      },
+      fetchPolicy: 'network-only'
     })
-    console.log('Tickets today:', result.data.Bus_ticket)  // ดูข้อมูลที่ได้
-    ticketsToday.value = result.data.Bus_ticket || []
+
+    queueOps.value = data.Bus_queue_op
+    total.value = data.Bus_queue_op_aggregate.aggregate.count
   } catch (err) {
-    error.value = err
-    console.error(err)
+    console.error('Error loading queue ops:', err)
   } finally {
     loading.value = false
   }
 }
 
+function changePage(page) {
+  if (page < 1 || page > totalPages.value) return
+  pagination.value.page = page
+  loadQueueOps()
+}
 
-// ค้นหาตาม input กดปุ่ม
-async function searchTickets() {
-  updateDateFormatted()
-  if (
-    searchDistance.value.trim() &&
-    searchDate.value &&
-    searchTime.value
-  ) {
-    loading.value = true
-    isSearching.value = true
+const totalPages = computed(() => Math.ceil(total.value / pagination.value.limit))
+const startItem = computed(() => (pagination.value.page - 1) * pagination.value.limit + 1)
+const endItem = computed(() => Math.min(pagination.value.page * pagination.value.limit, total.value))
 
-    // แปลงวันที่เป็น yyyy-mm-dd (รูปแบบฐานข้อมูล)
-    const formattedDate = new Date(searchDate.value).toISOString().split('T')[0]
-
-    try {
-      const result = await apolloClient.query({
-        query: GET_TICKETS_BY_DATES,
-        variables: { dates: [formattedDate] },
-      })
-
-      // กรองด้วยระยะทางและเวลา
-      ticketsSearch.value = result.data.Bus_ticket.filter(ticket => {
-        const distance = ticket.queue_op.bus_queue.bq_distance || ''
-        const time = ticket.queue_op.bus_queue.bq_time || ''
-        return (
-          distance.includes(searchDistance.value.trim()) &&
-          time === searchTime.value
-        )
-      })
-    } catch (err) {
-      error.value = err
-      console.error(err)
-    } finally {
-      loading.value = false
-    }
-  } else {
-    // ถ้า input ไม่ครบ ให้แสดงข้อมูลวันนี้แทน
-    isSearching.value = false
+function goToDetails(item) {
+  const bqId = item.bus_queue?.bq_id
+  const date = item.Date
+  if (bqId && date) {
+    router.push({ name: 'bus-detail', params: { bq_id: bqId, date } })
   }
 }
 
-// โหลดตอน mount
-onMounted(() => {
-  loadTodayTickets()
-})
+function searchBusQueue() {
+  pagination.value.page = 1
+  loadQueueOps()
+}
+
+onMounted(loadQueueOps)
+watch(() => pagination.value.limit, () => loadQueueOps())
 </script>
 
-<style scoped>
-.search-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.v-data-table thead th {
-  background-color: #4372e0;
-  color: white;
-  font-weight: bold;
-}
+<style>
+.page-title { text-align:center; color:#2f54c0; margin-bottom:24px; font-family:'Noto Sans Lao'; }
 </style>
